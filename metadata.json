@@ -1,0 +1,6 @@
+{
+  "name": "SGF - Sistema de Gestión Fronteriza Chile",
+  "description": "API REST y simulador para la automatización de procesos de aduana, SAG, PDI y control de vehículos en pasos fronterizos chilenos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
