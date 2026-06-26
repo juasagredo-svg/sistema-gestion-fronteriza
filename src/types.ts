@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type UserRole = 'VIAJERO' | 'INSPECTOR_SAG' | 'FUNCIONARIO_ADUANA' | 'OFICIAL_PDI' | 'ADMIN';
+export type UserRole = 'VIAJERO' | 'TURISTA' | 'INSPECTOR_SAG' | 'FUNCIONARIO_ADUANA' | 'OFICIAL_PDI' | 'ADMIN';
 
 export interface Usuario {
   id: string;
-  rut: string; // Chilean National ID (e.g., 12.345.678-9)
+  rut: string; // Chilean National ID or Passport
   nombre: string;
   apellido: string;
   email: string;
@@ -15,6 +15,11 @@ export interface Usuario {
   nacionalidad: string;
   rol: UserRole;
   fechaRegistro: string;
+  // PDI & Customs status properties
+  identificacionValida?: boolean; // true = válida, false = vencida/no auténtica
+  motivoIdInvalida?: 'VENCIDA' | 'NO_AUTENTICA' | 'OK';
+  ordenArresto?: boolean; // true = tiene orden de arresto
+  estadoIngreso?: 'PENDIENTE' | 'ACEPTADO' | 'RECHAZADO'; // SGF overall border status
 }
 
 export interface Vehiculo {

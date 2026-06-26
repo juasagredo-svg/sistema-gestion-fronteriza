@@ -19,7 +19,11 @@ let DB_USUARIOS: Usuario[] = [
     telefono: "+56987654321",
     nacionalidad: "CHILENA",
     rol: "VIAJERO",
-    fechaRegistro: "2026-06-10T14:30:00Z"
+    fechaRegistro: "2026-06-10T14:30:00Z",
+    identificacionValida: true,
+    motivoIdInvalida: "OK",
+    ordenArresto: false,
+    estadoIngreso: "PENDIENTE"
   },
   {
     id: "2",
@@ -73,8 +77,42 @@ let DB_USUARIOS: Usuario[] = [
     email: "mateo.viajero@hotmail.com",
     telefono: "+549341555566",
     nacionalidad: "ARGENTINA",
+    rol: "TURISTA",
+    fechaRegistro: "2026-06-25T18:20:00Z",
+    identificacionValida: true,
+    motivoIdInvalida: "OK",
+    ordenArresto: false,
+    estadoIngreso: "PENDIENTE"
+  },
+  {
+    id: "7",
+    rut: "8.888.888-8",
+    nombre: "Sven",
+    apellido: "Lindqvist",
+    email: "sven.turista@gmail.com",
+    telefono: "+461234567",
+    nacionalidad: "SUECA",
+    rol: "TURISTA",
+    fechaRegistro: "2026-06-26T10:00:00Z",
+    identificacionValida: false,
+    motivoIdInvalida: "VENCIDA",
+    ordenArresto: false,
+    estadoIngreso: "PENDIENTE"
+  },
+  {
+    id: "8",
+    rut: "7.777.777-7",
+    nombre: "Carlos",
+    apellido: "Berríos",
+    email: "carlos.b@gmail.com",
+    telefono: "+56955552222",
+    nacionalidad: "CHILENA",
     rol: "VIAJERO",
-    fechaRegistro: "2026-06-25T18:20:00Z"
+    fechaRegistro: "2026-06-26T10:10:00Z",
+    identificacionValida: true,
+    motivoIdInvalida: "OK",
+    ordenArresto: true,
+    estadoIngreso: "PENDIENTE"
   }
 ];
 
@@ -274,7 +312,7 @@ async function startServer() {
     else if (user.rol === "FUNCIONARIO_ADUANA" && normalizedPassword === "SgfAduana2026!") isCorrect = true;
     else if (user.rol === "OFICIAL_PDI" && normalizedPassword === "SgfPdi2026!") isCorrect = true;
     else if (user.rol === "ADMIN" && normalizedPassword === "SgfAdmin2026!") isCorrect = true;
-    else if (user.rol === "VIAJERO" && (normalizedPassword === "password123" || normalizedPassword === "SgfViajero2026!")) isCorrect = true;
+    else if ((user.rol === "VIAJERO" || user.rol === "TURISTA") && (normalizedPassword === "password123" || normalizedPassword === "SgfViajero2026!")) isCorrect = true;
     else if (normalizedPassword === "password123") isCorrect = true; // global fallback
 
     if (!isCorrect) {
@@ -293,11 +331,104 @@ async function startServer() {
         apellido: user.apellido,
         email: user.email,
         rol: user.rol,
-        nacionalidad: user.nacionalidad
+        nacionalidad: user.nacionalidad,
+        identificacionValida: user.identificacionValida !== undefined ? user.identificacionValida : true,
+        motivoIdInvalida: user.motivoIdInvalida || "OK",
+        ordenArresto: !!user.ordenArresto,
+        estadoIngreso: user.estadoIngreso || "PENDIENTE"
       }
     };
     logApiCall("POST", "/api/v1/login", 200, req.body, successRes);
     res.json(successRes);
+  });
+
+  // ==========================================
+  // Register Route for Turistas / Viajeros
+  // ==========================================
+  app.post('/api/v1/register', (req, res) => {
+    const { rut, nombre, apellido, email, password, telefono, nacionalidad, rol } = req.body;
+
+    if (!rut || !nombre || !apellido || !email || !nacionalidad) {
+      const err = { error: "RUT, Nombre, Apellido, Email y Nacionalidad son obligatorios" };
+      logApiCall("POST", "/api/v1/register", 400, req.body, err);
+      return res.status(400).json(err);
+    }
+
+    if (DB_USUARIOS.some(u => u.rut === rut || u.email.toLowerCase() === email.toLowerCase())) {
+      const err = { error: "El RUT o Correo Electrónico ya se encuentra registrado" };
+      logApiCall("POST", "/api/v1/register", 400, req.body, err);
+      return res.status(400).json(err);
+    }
+
+    const nuevoUsuario: Usuario = {
+      id: String(DB_USUARIOS.length + 1),
+      rut,
+      nombre,
+      apellido,
+      email,
+      telefono,
+      nacionalidad: nacionalidad.toUpperCase(),
+      rol: (rol as UserRole) || "TURISTA",
+      fechaRegistro: new Date().toISOString(),
+      identificacionValida: true,
+      motivoIdInvalida: "OK",
+      ordenArresto: false,
+      estadoIngreso: "PENDIENTE"
+    };
+
+    DB_USUARIOS.push(nuevoUsuario);
+
+    const token = generateSimulatedToken(nuevoUsuario);
+    const successRes = {
+      token,
+      usuario: nuevoUsuario
+    };
+
+    logApiCall("POST", "/api/v1/register", 201, req.body, successRes);
+    res.status(201).json(successRes);
+  });
+
+  // ==========================================
+  // PDI Field Update Endpoint
+  // ==========================================
+  app.post('/api/v1/usuarios/:id/pdi-update', (req, res) => {
+    const { identificacionValida, motivoIdInvalida, ordenArresto } = req.body;
+    const user = DB_USUARIOS.find(u => u.id === req.params.id);
+
+    if (!user) {
+      const err = { error: "Usuario no encontrado" };
+      logApiCall("POST", `/api/v1/usuarios/${req.params.id}/pdi-update`, 404, req.body, err);
+      return res.status(404).json(err);
+    }
+
+    if (identificacionValida !== undefined) user.identificacionValida = !!identificacionValida;
+    if (motivoIdInvalida !== undefined) user.motivoIdInvalida = motivoIdInvalida;
+    if (ordenArresto !== undefined) user.ordenArresto = !!ordenArresto;
+
+    // If arrest warrant is true or ID is invalid, set status appropriately or let PDI update
+    logApiCall("POST", `/api/v1/usuarios/${req.params.id}/pdi-update`, 200, req.body, user);
+    res.json(user);
+  });
+
+  // ==========================================
+  // Border Access (Aduana / PDI / General) Status Update Endpoint
+  // ==========================================
+  app.post('/api/v1/usuarios/:id/estado-ingreso', (req, res) => {
+    const { estadoIngreso } = req.body;
+    const user = DB_USUARIOS.find(u => u.id === req.params.id);
+
+    if (!user) {
+      const err = { error: "Usuario no encontrado" };
+      logApiCall("POST", `/api/v1/usuarios/${req.params.id}/estado-ingreso`, 404, req.body, err);
+      return res.status(404).json(err);
+    }
+
+    if (estadoIngreso) {
+      user.estadoIngreso = estadoIngreso;
+    }
+
+    logApiCall("POST", `/api/v1/usuarios/${req.params.id}/estado-ingreso`, 200, req.body, user);
+    res.json(user);
   });
 
   // ==========================================
