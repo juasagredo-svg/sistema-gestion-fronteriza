@@ -193,9 +193,11 @@ export default function App() {
     try {
       // 1. Fetch Users
       const resUsers = await fetch(`${API_BASE}/usuarios`);
+      let fetchedUsers = [];
       if (resUsers.ok) {
         const data = await resUsers.json();
         setUsuarios(data);
+        fetchedUsers = data;
       }
 
       // 2. Fetch Vehicles
@@ -224,6 +226,15 @@ export default function App() {
       if (resLogs.ok) {
         const data = await resLogs.json();
         setApiLogs(data);
+      }
+
+      // Sync current logged user in real-time if updated from PDI or Aduanas
+      if (currentUser && fetchedUsers.length > 0) {
+        const freshUser = fetchedUsers.find((u: any) => u.id === currentUser.id || u.rut === currentUser.rut);
+        if (freshUser) {
+          setCurrentUser(freshUser);
+          localStorage.setItem('sgf_user', JSON.stringify(freshUser));
+        }
       }
     } catch (error) {
       console.error("Error connecting to SGF simulated server endpoints:", error);
@@ -1067,8 +1078,48 @@ export default function App() {
 
         {/* WORK AREA / INNER VIEW ROUTER */}
         <div className="flex-1 p-8 overflow-y-auto space-y-8">
-          
-          {/* SEARCH & REST STATS BAR (Common Header for SGF Dashboard) */}
+          {currentUser?.ordenArresto ? (
+            <div className="p-8 bg-white border-2 border-rose-500 rounded-3xl shadow-xl space-y-6 max-w-2xl mx-auto text-center animate-pulse my-8">
+              <div className="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-600">
+                <ShieldAlert className="w-12 h-12" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-extrabold text-rose-700 uppercase tracking-wide">🚫 TRÁNSITO FRONTERIZO BLOQUEADO</h3>
+                <p className="text-slate-700 text-sm font-medium">
+                  Atención, <strong>{currentUser.nombre} {currentUser.apellido}</strong> (RUT: <strong>{currentUser.rut}</strong>).
+                </p>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  El Sistema de Gestión Fronteriza (SGF) de la aduana de Chile ha detectado una orden de detención activa en la base de datos de la Policía de Investigaciones (PDI). Por motivos de seguridad nacional y cumplimiento legal, se han bloqueado preventivamente todos los procesos de este portal aduanero.
+                </p>
+              </div>
+
+              <div className="p-4 bg-rose-50 text-rose-800 rounded-xl border border-rose-100 text-left text-xs space-y-2">
+                <p className="font-bold">Pasos requeridos para habilitar su tránsito:</p>
+                <ul className="list-disc pl-4 space-y-1 text-slate-600">
+                  <li>Acérquese de forma inmediata a la ventanilla o casilla de la Policía de Investigaciones (PDI) en el paso fronterizo actual.</li>
+                  <li>El oficial de policía revisará su estatus y, de regularizarse la situación, utilizará el panel PDI del SGF para dar de baja la alerta judicial.</li>
+                  <li>Una vez desactivada la alerta judicial, este portal se desbloqueará de inmediato y podrá continuar con sus declaraciones SAG, Aduana y registro vehicular.</li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                <button 
+                  onClick={refreshAllData}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition-all shadow cursor-pointer uppercase tracking-wider"
+                >
+                  🔄 Re-verificar con Servidor SGF
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-rose-500/20 cursor-pointer uppercase tracking-wider"
+                >
+                  🚪 Cerrar Sesión (Simulador)
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* SEARCH & REST STATS BAR (Common Header for SGF Dashboard) */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -2059,122 +2110,144 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
               {/* Left Column: Register Vehicle Form (RF-003) */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 self-start">
-                <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-slate-100">
-                  <Car className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-bold text-slate-800">RF-003: Registrar Patente de Vehículo</h3>
-                </div>
-
-                <form onSubmit={handleCreateVehicle} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Patente Única *</label>
-                    <input 
-                      type="text"
-                      required
-                      placeholder="ej: DFGR-82 o AE948LK"
-                      value={newVehiculo.patente}
-                      onChange={(e) => setNewVehiculo({ ...newVehiculo, patente: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none font-mono font-bold"
-                    />
-                    <span className="text-[10px] text-slate-400">Patentes chilenas o extranjeras</span>
+              {currentUser?.rol === 'VIAJERO' || currentUser?.rol === 'TURISTA' || currentUser?.rol === 'ADMIN' ? (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 self-start">
+                  <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-slate-100">
+                    <Car className="w-5 h-5 text-blue-600" />
+                    <h3 className="font-bold text-slate-800">RF-003: Registrar Patente de Vehículo</h3>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <form onSubmit={handleCreateVehicle} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Marca *</label>
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Patente Única *</label>
                       <input 
                         type="text"
                         required
-                        placeholder="Toyota"
-                        value={newVehiculo.marca}
-                        onChange={(e) => setNewVehiculo({ ...newVehiculo, marca: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                        placeholder="ej: DFGR-82 o AE948LK"
+                        value={newVehiculo.patente}
+                        onChange={(e) => setNewVehiculo({ ...newVehiculo, patente: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none font-mono font-bold"
                       />
+                      <span className="text-[10px] text-slate-400">Patentes chilenas o extranjeras</span>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Marca *</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Toyota"
+                          value={newVehiculo.marca}
+                          onChange={(e) => setNewVehiculo({ ...newVehiculo, marca: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Modelo *</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="RAV4"
+                          value={newVehiculo.modelo}
+                          onChange={(e) => setNewVehiculo({ ...newVehiculo, modelo: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Modelo *</label>
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">RUT Propietario / Conductor *</label>
                       <input 
                         type="text"
                         required
-                        placeholder="RAV4"
-                        value={newVehiculo.modelo}
-                        onChange={(e) => setNewVehiculo({ ...newVehiculo, modelo: e.target.value })}
+                        placeholder="ej: 12.345.678-9"
+                        value={newVehiculo.propietarioRut}
+                        onChange={(e) => setNewVehiculo({ ...newVehiculo, propietarioRut: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">RUT Propietario / Conductor *</label>
-                    <input 
-                      type="text"
-                      required
-                      placeholder="ej: 12.345.678-9"
-                      value={newVehiculo.propietarioRut}
-                      onChange={(e) => setNewVehiculo({ ...newVehiculo, propietarioRut: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
-                    />
-                  </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2">
+                        <label className="block text-xs font-bold text-slate-600 uppercase mb-1">País Registro</label>
+                        <select 
+                          value={newVehiculo.paisRegistro}
+                          onChange={(e) => setNewVehiculo({ ...newVehiculo, paisRegistro: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                        >
+                          <option value="CHILE">CHILE</option>
+                          <option value="ARGENTINA">ARGENTINA</option>
+                          <option value="BRASIL">BRASIL</option>
+                          <option value="BOLIVIA">BOLIVIA</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Año</label>
+                        <input 
+                          type="number"
+                          required
+                          value={newVehiculo.anio}
+                          onChange={(e) => setNewVehiculo({ ...newVehiculo, anio: Number(e.target.value) })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                        />
+                      </div>
+                    </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2">
-                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">País Registro</label>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Tipo de Vehículo</label>
                       <select 
-                        value={newVehiculo.paisRegistro}
-                        onChange={(e) => setNewVehiculo({ ...newVehiculo, paisRegistro: e.target.value })}
+                        value={newVehiculo.tipoVehiculo}
+                        onChange={(e) => setNewVehiculo({ ...newVehiculo, tipoVehiculo: e.target.value as any })}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
                       >
-                        <option value="CHILE">CHILE</option>
-                        <option value="ARGENTINA">ARGENTINA</option>
-                        <option value="BRASIL">BRASIL</option>
-                        <option value="BOLIVIA">BOLIVIA</option>
+                        <option value="PARTICULAR">PARTICULAR</option>
+                        <option value="COMERCIAL">COMERCIAL</option>
+                        <option value="BUS">BUS / COLECTIVO</option>
+                        <option value="MOTO">MOTOCICLETA</option>
                       </select>
                     </div>
+
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Año</label>
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Número de Chasis (VIN)</label>
                       <input 
-                        type="number"
-                        required
-                        value={newVehiculo.anio}
-                        onChange={(e) => setNewVehiculo({ ...newVehiculo, anio: Number(e.target.value) })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                        type="text"
+                        placeholder="Opcional"
+                        value={newVehiculo.numeroChasis}
+                        onChange={(e) => setNewVehiculo({ ...newVehiculo, numeroChasis: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none font-mono"
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Tipo de Vehículo</label>
-                    <select 
-                      value={newVehiculo.tipoVehiculo}
-                      onChange={(e) => setNewVehiculo({ ...newVehiculo, tipoVehiculo: e.target.value as any })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                    <button 
+                      type="submit"
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold rounded-xl text-sm shadow-md"
                     >
-                      <option value="PARTICULAR">PARTICULAR</option>
-                      <option value="COMERCIAL">COMERCIAL</option>
-                      <option value="BUS">BUS / COLECTIVO</option>
-                      <option value="MOTO">MOTOCICLETA</option>
-                    </select>
+                      Registrar Patente
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 self-start space-y-4">
+                  <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                    <Shield className="w-5 h-5 text-blue-600" />
+                    <h3 className="font-bold text-slate-800">Directrices de Control de Aduana</h3>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Número de Chasis (VIN)</label>
-                    <input 
-                      type="text"
-                      placeholder="Opcional"
-                      value={newVehiculo.numeroChasis}
-                      onChange={(e) => setNewVehiculo({ ...newVehiculo, numeroChasis: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none font-mono"
-                    />
+                  <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 text-xs text-blue-850 space-y-2 leading-relaxed">
+                    <p className="font-bold uppercase tracking-wide text-blue-900">Solo el Viajero declara el Vehículo</p>
+                    <p>Como funcionario o inspector de control, usted no puede registrar vehículos directamente. Los viajeros deben declarar su patente desde su respectiva cuenta de viajero o turista.</p>
+                    <p>Su función es verificar la lista de la derecha, comprobar si el propietario tiene su documentación en regla y tomar la decisión de <strong>Autorizar</strong> o <strong>Rechazar</strong> la patente.</p>
                   </div>
-
-                  <button 
-                    type="submit"
-                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold rounded-xl text-sm shadow-md"
-                  >
-                    Registrar Patente
-                  </button>
-                </form>
-              </div>
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wider">Criterios de Autorización Vehicular:</h4>
+                    <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4">
+                      <li>El conductor debe poseer identificación auténtica y vigente en Chile (validada por PDI).</li>
+                      <li>La declaración conjunta SAG no debe reportar patógenos ni contrabando orgánico sin declarar.</li>
+                      <li>No debe existir una orden de detención activa para el viajero (orden de arresto PDI).</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
 
               {/* Right Column: List and status management of registered vehicles */}
               <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col overflow-hidden">
@@ -2206,51 +2279,113 @@ export default function App() {
                           <td colSpan={6} className="px-6 py-8 text-center text-slate-400 italic">No hay patentes registradas en el SGF que coincidan.</td>
                         </tr>
                       ) : (
-                        filteredVehiculos.map((v) => (
-                          <tr key={v.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                              <span className="inline-block px-3 py-1 bg-amber-50 text-slate-900 border-2 border-slate-900 font-mono font-extrabold text-sm rounded-md tracking-wider">
-                                {v.patente}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="font-semibold text-slate-800">{v.marca} {v.modelo}</span>
-                              <span className="text-xs text-slate-400 block">{v.tipoVehiculo} ({v.anio})</span>
-                            </td>
-                            <td className="px-6 py-4 text-slate-600 font-mono text-xs">{v.propietarioRut}</td>
-                            <td className="px-6 py-4 text-slate-600 text-xs font-medium">{v.paisRegistro}</td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                                v.estado === 'AUTORIZADO' ? 'bg-emerald-100 text-emerald-800' :
-                                v.estado === 'RECHAZADO' ? 'bg-rose-100 text-rose-800' :
-                                'bg-amber-100 text-amber-800'
-                              }`}>
-                                {v.estado === 'AUTORIZADO' ? <CheckCircle2 className="w-3.5 h-3.5" /> : v.estado === 'RECHAZADO' ? <XCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                                {v.estado}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              {currentUser?.rol === 'FUNCIONARIO_ADUANA' || currentUser?.rol === 'ADMIN' ? (
-                                <div className="flex justify-end gap-1.5">
-                                  <button 
-                                    onClick={() => handleUpdateVehicleStatus(v.id, 'AUTORIZADO')}
-                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg transition-colors"
-                                  >
-                                    Autorizar
-                                  </button>
-                                  <button 
-                                    onClick={() => handleUpdateVehicleStatus(v.id, 'RECHAZADO')}
-                                    className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold rounded-lg transition-colors"
-                                  >
-                                    Rechazar
-                                  </button>
+                        filteredVehiculos.map((v) => {
+                          const ownerUser = usuarios.find(u => u.rut === v.propietarioRut);
+                          const sagDoc = documentos.find(d => d.viajeroRut === v.propietarioRut && d.tipo === 'DECLARACION_SAG');
+                          const pdiDoc = documentos.find(d => d.viajeroRut === v.propietarioRut && d.tipo === 'PERMISO_PDI');
+
+                          const isSagApproved = sagDoc?.estado === 'APROBADO';
+                          const isPdiApproved = pdiDoc?.estado === 'APROBADO' && ownerUser?.identificacionValida !== false && !ownerUser?.ordenArresto;
+                          const isTodoEnRegla = isSagApproved && isPdiApproved;
+
+                          return (
+                            <tr key={v.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-6 py-4">
+                                <span className="inline-block px-3 py-1 bg-amber-50 text-slate-900 border-2 border-slate-900 font-mono font-extrabold text-sm rounded-md tracking-wider">
+                                  {v.patente}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="font-semibold text-slate-800">{v.marca} {v.modelo}</span>
+                                <span className="text-xs text-slate-400 block">{v.tipoVehiculo} ({v.anio})</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="font-mono text-xs text-slate-850 font-semibold block">{v.propietarioRut}</span>
+                                {ownerUser ? (
+                                  <span className="text-[10px] text-slate-500 block truncate max-w-[150px]">
+                                    {ownerUser.nombre} {ownerUser.apellido}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic block">Sin cuenta registrada</span>
+                                )}
+                                
+                                <div className="mt-2 space-y-1">
+                                  <div className="flex items-center gap-1.5 text-[10px]">
+                                    <span className="text-slate-400 font-semibold">SAG:</span>
+                                    {isSagApproved ? (
+                                      <span className="text-emerald-600 font-bold flex items-center gap-0.5">✓ Aprobado</span>
+                                    ) : sagDoc ? (
+                                      <span className="text-amber-600 font-bold flex items-center gap-0.5">⚠️ {sagDoc.estado}</span>
+                                    ) : (
+                                      <span className="text-rose-600 font-bold flex items-center gap-0.5">✗ Falta</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px]">
+                                    <span className="text-slate-400 font-semibold">PDI:</span>
+                                    {isPdiApproved ? (
+                                      <span className="text-emerald-600 font-bold flex items-center gap-0.5">✓ Aprobado</span>
+                                    ) : ownerUser?.ordenArresto ? (
+                                      <span className="text-red-600 font-extrabold flex items-center gap-0.5 animate-pulse">🚨 ARRESTO</span>
+                                    ) : ownerUser?.identificacionValida === false ? (
+                                      <span className="text-red-600 font-bold flex items-center gap-0.5">ID Inválida</span>
+                                    ) : pdiDoc ? (
+                                      <span className="text-amber-600 font-bold flex items-center gap-0.5">⚠️ {pdiDoc.estado}</span>
+                                    ) : (
+                                      <span className="text-rose-600 font-bold flex items-center gap-0.5">✗ Falta</span>
+                                    )}
+                                  </div>
+                                  {isTodoEnRegla ? (
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold border border-emerald-200">
+                                      ✓ EN REGLA
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] bg-rose-50 text-rose-750 px-1.5 py-0.5 rounded font-bold border border-rose-200 animate-pulse">
+                                      ⚠️ OBSERVADO
+                                    </span>
+                                  )}
                                 </div>
-                              ) : (
-                                <span className="text-xs text-slate-400 italic">Req. Funcionario Aduana</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
+                              </td>
+                              <td className="px-6 py-4 text-slate-600 text-xs font-medium">{v.paisRegistro}</td>
+                              <td className="px-6 py-4">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                                  v.estado === 'AUTORIZADO' ? 'bg-emerald-100 text-emerald-800' :
+                                  v.estado === 'RECHAZADO' ? 'bg-rose-100 text-rose-800' :
+                                  'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {v.estado === 'AUTORIZADO' ? <CheckCircle2 className="w-3.5 h-3.5" /> : v.estado === 'RECHAZADO' ? <XCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                  {v.estado}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                {currentUser?.rol === 'FUNCIONARIO_ADUANA' || currentUser?.rol === 'ADMIN' ? (
+                                  <div className="space-y-1">
+                                    <div className="flex justify-end gap-1.5">
+                                      <button 
+                                        onClick={() => handleUpdateVehicleStatus(v.id, 'AUTORIZADO')}
+                                        className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
+                                      >
+                                        Autorizar
+                                      </button>
+                                      <button 
+                                        onClick={() => handleUpdateVehicleStatus(v.id, 'RECHAZADO')}
+                                        className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
+                                      >
+                                        Rechazar
+                                      </button>
+                                    </div>
+                                    {!isTodoEnRegla && (
+                                      <span className="text-[10px] text-rose-600 font-bold block text-right mt-1">
+                                        ⚠️ Requiere SAG & PDI OK
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">Req. Funcionario Aduana</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -3305,7 +3440,8 @@ export default function App() {
               )}
             </div>
           )}
-
+            </>
+          )}
         </div>
 
       </main>
